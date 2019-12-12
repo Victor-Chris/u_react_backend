@@ -1,7 +1,15 @@
+//__________________MIDDLEWARE FUNCTIONS FILE______________________
+// Commented code is for system w dummy data (w/o the MongoDB)
+
+//________LIBRARIES__________
 const uuid = require('uuid/v4');
 const { validationResult } = require('express-validator');
 
+//_______COMPONENTS___________
 const HttpError = require('../models/http-error');
+
+//_________MODELS____________
+const User = require('../models/users');
 
 const DUMMY_USERS = [
     {
@@ -16,7 +24,7 @@ const getUsers = (req, res, next) => {
     res.json({ users: DUMMY_USERS })
 }
 
-const signup = (req, res, next) => {
+/* const signup = (req, res, next) => {
     const errors = validationResult(req);
     if(!errors.isEmpty()){
         throw new HttpError('Invalid inputs passed. Please check your data!', 422);
@@ -39,6 +47,57 @@ const signup = (req, res, next) => {
     DUMMY_USERS.push(createdUser);
 
     res.status(201).json({ user: createdUser });
+}; */
+
+const signup = async (req, res, next) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()){
+        return next(
+            new HttpError('Invalid inputs passed. Please check your data!', 422)
+        );
+    }
+
+    const { name, email, password, places } = req.body;
+
+    let existingUser
+
+    try{
+        existingUser = await User.findOne({ email: email });
+    }catch(err){
+        const error = new HttpError(
+            "Signing up failed, please try again later.", 500
+        )
+
+        return next(error);
+    }
+
+    if(existingUser){
+        const error = new HttpError(
+            "User exists already, please login instead.", 422
+        );
+        return next(error);
+    }
+   
+
+    const createdUser = new User({
+        name,
+        email,
+        image: 'https://cdn.hasselblad.com/50fa7113b58d986f501c5ecf7e2f9c0e83e6b4e8_x1d-ii-sample-01.jpg',
+        password,
+        places
+    });
+
+    try{
+        await createdUser.save();
+    }catch(err){
+        const error = new HttpError(
+            'Signing up 3 failed, please try again',
+            500
+        );
+        return next(error);
+    }
+
+    res.status(201).json({ user: createdUser.toObject({ getters: true }) });
 };
 
 const login = (req, res, next) => {
