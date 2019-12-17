@@ -4,6 +4,7 @@
 //________LIBRARIES__________
 const uuid = require('uuid/v4');
 const { validationResult } = require('express-validator');
+const monogoose = require('mongoose');
 
 //_______COMPONENTS___________
 const HttpError = require('../models/http-error');
@@ -11,6 +12,7 @@ const getCoordsForAddress = require('../util/location');
 
 //_________MODELS____________
 const Place = require('../models/places');
+const User = require('../models/users');
 
 /* let DUMMY_PLACES = [
     {
@@ -141,21 +143,44 @@ const createPlace = async (req, res, next) => {
         location: coordinates,
         image: 'https://cdn.hasselblad.com/50fa7113b58d986f501c5ecf7e2f9c0e83e6b4e8_x1d-ii-sample-01.jpg',
         creator
-    })
+    });
 
-    //DUMMY_PLACES.push(createdPlace);
-try{
-    await createdPlace.save();
-}catch(err){
-    const error = new HttpError(
-        'Creating place failed, please try again',
-        500
-    );
-    return next(error);
-}
+    let user;
+    try{
+        user = await User.findById(creator);
+    }catch(err){
+        console.log('Failed to find user');
+        const error = new HttpError(
+            'Creating place failed, please try againmmmmmm.', 500
+        );
+        return next(error);
+    }
 
-    res.status(201).json({place: createdPlace});
-}
+    if(!user){
+        const error = new HttpError(
+            'Could not find user for provided id', 404
+        );
+        return next(error);
+    }
+
+    try{
+        //Session constant
+        const sess = await monogoose.startSession();
+        sess.startTransaction();
+        await createdPlace.save({ session: sess });
+        user.places.push(createdPlace);
+        await user.save({ session: sess });
+        await sess.commitTransaction();
+    }catch(err){
+        const error = new HttpError(
+            'Creating place failed, please try again',
+            500
+        );
+        return next(error);
+    }
+
+        res.status(201).json({place: createdPlace});
+    }
 
 /* const updatePlace = (req, res, next) => {
     const errors = validationResult(req);
@@ -230,7 +255,7 @@ const deletePlace = async (req, res, next) => {
 
     //Find the place
     try{
-        place = await Place.findById(placeId);
+        place = await Place.findById(placeId).populate('creator');
     }catch(err){
         const error = new HttpError(
             "Something went wrong, could not delete place.", 500
@@ -239,9 +264,21 @@ const deletePlace = async (req, res, next) => {
         return next(error);
     }
 
+    if(!place){
+        const error =  new HttpError(
+            'Could not find a place with this id.', 404 
+        );
+        return next(error);
+    }
+
     //Delete the place
     try{
-        await place.remove();
+        const sess = await monogoose.startSession();
+        sess.startTransaction();
+        await place.remove({ session: sess });
+        place.creator.places.pull(place);
+        await place.creator.save({ session: sess });
+        await sess.commitTransaction();
     }catch(err){
         const error = new HttpError(
             "Something went wrong, could not delete place.", 500

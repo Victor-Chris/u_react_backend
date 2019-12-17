@@ -70,7 +70,7 @@ const signup = async (req, res, next) => {
         );
     }
 
-    const { name, email, password, places } = req.body;
+    const { name, email, password } = req.body;
 
     let existingUser;
     try{
@@ -94,7 +94,7 @@ const signup = async (req, res, next) => {
         email,
         image: 'https://cdn.hasselblad.com/50fa7113b58d986f501c5ecf7e2f9c0e83e6b4e8_x1d-ii-sample-01.jpg',
         password,
-        places
+        places: []
     });
 
     try{
